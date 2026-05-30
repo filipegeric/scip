@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+		/>
+
+		<title>Structured Concurrency in Practice</title>
+
+		<link rel="stylesheet" href="dist/reset.css" />
+		<link rel="stylesheet" href="dist/reveal.css" />
+		<link id="theme-link" rel="stylesheet" href="dist/theme/night.css" />
+		<link rel="stylesheet" href="dist/plugin/highlight/monokai.css" />
+		<link rel="stylesheet" href="assets/styles.css" />
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<!-- 1. Title -->
+				<section class="slide">
+					<h1 class="r-fit-text">Structured Concurrency in Practice</h1>
+					<p>
+						<span data-lang="kotlin">CoroutineScope</span>
+						vs
+						<span data-lang="java">StructuredTaskScope</span>
+					</p>
+				</section>
+
+				<!-- 2. About me -->
+				<section class="slide">
+					<article class="profile">
+						<img class="avatar" src="assets/avatar.png" alt="Filip Egerić" />
+						<div class="bio" data-eyebrow="About me">
+							<h2 class="name">Filip Egerić</h2>
+							<p class="role">
+								<span>Software Engineer at</span>
+								<img class="logo" src="assets/clue-logo.svg" alt="Clue" />
+							</p>
+							<p class="meta">
+								Period tracking app · 10M monthly active users · 190+ countries
+							</p>
+							<p class="stack">Kotlin · Spring · Ktor</p>
+							<ul class="contacts">
+								<li><a href="https://github.com/filipegeric" target="_blank" rel="noopener">github.com/filipegeric</a></li>
+								<li><a href="https://linkedin.com/in/filipegeric" target="_blank" rel="noopener">linkedin.com/in/filipegeric</a></li>
+							</ul>
+						</div>
+					</article>
+				</section>
+
+				<!-- 3. Structured Concurrency — the idea -->
+				<section>
+					<section class="slide" data-eyebrow="The idea">
+						<h2 data-display>Structured Concurrency</h2>
+						<p class="tagline">
+							Every concurrent task's lifetime is <em class="emphasis">bounded by a scope</em>
+							&mdash; the way variables are bounded by a block.
+						</p>
+						<div class="pillars">
+							<div class="pillar" data-accent="lifetime">
+								<h3>Lifetime</h3>
+								<p>Tasks can't outlive the scope that spawned them</p>
+							</div>
+							<div class="pillar" data-accent="errors">
+								<h3>Errors</h3>
+								<p>Failures propagate up to the parent scope</p>
+							</div>
+							<div class="pillar" data-accent="cancellation">
+								<h3>Cancellation</h3>
+								<p>Cancelling a scope cancels all its children</p>
+							</div>
+						</div>
+					</section>
+
+					<!-- 3a. Demo (vertical) -->
+					<section class="slide">
+						<h2 data-display>Demo</h2>
+					</section>
+
+					<!-- 3b. Thank you (vertical) -->
+					<section class="slide">
+						<h2 data-display>Thank you</h2>
+					</section>
+				</section>
+
+				<!-- 4. Fetching a book — Part 1 starting code -->
+				<section class="slide" data-eyebrow="The endpoint">
+					<h2>Fetching a book</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book {
+    val book = findBook(id)
+    val reviews = fetchReviewsFor(id)
+
+    return book.copy(reviews = reviews)
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">Two I/O calls, one after the other. Total: ~2s.</p>
+				</section>
+
+				<!-- 5. Wishful thinking -->
+				<section class="slide" data-eyebrow="Going parallel">
+					<h2>First attempt</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+suspend fun fetchBook(@PathVariable id: Long): Book = coroutineScope {
+    val book    = async { findBook(id) }
+    val reviews = async { fetchReviewsFor(id) }
+
+    book.await().copy(reviews = reviews.await())
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">Compiles, misbehaves at runtime &mdash; webmvc + blocking JDBC weren't built for coroutines.</p>
+				</section>
+
+				<!-- 6. runBlocking -->
+				<section class="slide" data-eyebrow="Going parallel">
+					<h2>Try <code>runBlocking</code></h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book = runBlocking {
+    val book    = async { findBook(id) }
+    val reviews = async { fetchReviewsFor(id) }
+
+    book.await().copy(reviews = reviews.await())
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">Works. Still ~2s &mdash; <code>async</code> starts eagerly on <code>runBlocking</code>'s single thread; with no suspension points, the calls run back-to-back.</p>
+				</section>
+
+				<!-- 7. Dispatchers.IO -->
+				<section class="slide" data-eyebrow="Going parallel">
+					<h2><code>Dispatchers.IO</code></h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book = runBlocking(Dispatchers.IO) {
+    val book    = async { findBook(id) }
+    val reviews = async { fetchReviewsFor(id) }
+
+    book.await().copy(reviews = reviews.await())
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">~1s. Happy path done.</p>
+				</section>
+
+				<!-- 8. The sad path — errors -->
+				<section class="slide" data-eyebrow="Errors">
+					<h2>What if reviews fails?</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-bash">
+books-repository.delay-in-seconds=3
+reviews-service.delay-in-seconds=1
+reviews-service.fail=true
+
+$ curl -w 'time: %{time_total}s\n' /books/3
+500 Internal Server Error
+time: 3.18s
+						</code></pre>
+					</figure>
+
+					<p class="caption">
+						Book bumped to 3s to make the effect visible. Reviews fails after 1s,
+						but we still wait 2 more seconds for the book.
+						Worse than an error: <em class="emphasis">a slow error.</em>
+					</p>
+				</section>
+
+				<!-- 9. runInterruptible -->
+				<section class="slide" data-eyebrow="Errors">
+					<h2><code>runInterruptible</code></h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+private suspend fun findBook(id: Long) = runInterruptible {
+    booksRepository.findById(id) ?: throw BookNotFoundException(id)
+}
+
+private suspend fun fetchReviewsFor(id: Long) = runInterruptible {
+    reviewsService.fetchReviewsFor(id)
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">
+						Blocking JDBC can't be cancelled &mdash; only <em class="emphasis">interrupted</em>.
+						Now fails in 1s.
+					</p>
+				</section>
+
+				<!-- 10. The price of CoroutineScope (recap) -->
+				<section class="slide" data-eyebrow="Wait — what it took">
+					<h2>Just to make 2 calls in parallel</h2>
+
+					<ul class="bullets">
+						<li class="bullet" data-variant="errors"><span>Extra library (<code>coroutines</code>)</span></li>
+						<li class="bullet" data-variant="errors"><span><code>runBlocking</code> at the boundary</span></li>
+						<li class="bullet" data-variant="errors"><span><code>Dispatchers.IO</code> for actual parallelism</span></li>
+						<li class="bullet" data-variant="errors"><span><code>runInterruptible</code> on every blocking call</span></li>
+					</ul>
+				</section>
+
+				<!-- 11. Coroutines are all-in / there's another way -->
+				<section class="slide" data-eyebrow="Another way">
+					<h2>Coroutines are all-in</h2>
+
+					<p class="tagline">
+						Mark one function <code>suspend</code> &mdash; mark <em class="emphasis">every caller</em>.
+						The keyword spreads.
+					</p>
+				</section>
+
+				<!-- 12. StructuredTaskScope — canonical example from JEP 505 -->
+				<section class="slide" data-eyebrow="JEP 505">
+					<h2>StructuredTaskScope</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-java">
+Response handle() throws InterruptedException {
+
+    try (var scope = StructuredTaskScope.open()) {
+
+        Subtask&lt;String&gt;  user  = scope.fork(() -&gt; findUser());
+        Subtask&lt;Integer&gt; order = scope.fork(() -&gt; fetchOrder());
+
+        scope.join();   // Join subtasks, propagating exceptions
+
+        // Both subtasks have succeeded, so compose their results
+        return new Response(user.get(), order.get());
+
+    }
+
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">JDK 25 preview &mdash; Java's native structured concurrency.</p>
+				</section>
+
+				<!-- 13. Bookstore with taskScope -->
+				<section class="slide" data-eyebrow="StructuredTaskScope">
+					<h2>Back to the bookstore</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book = taskScope {
+    val book    = fork { findBook(id) }
+    val reviews = fork { fetchReviewsFor(id) }
+
+    join()
+
+    book.get().copy(reviews = reviews.get())
+}
+						</code></pre>
+					</figure>
+
+					<p class="caption">
+						No <code>suspend</code>. No <code>runInterruptible</code>. No dispatchers.
+					</p>
+				</section>
+
+				<!-- 14. Sad path: just works -->
+				<section class="slide" data-eyebrow="StructuredTaskScope">
+					<h2>Sad path: just works</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-bash">
+$ curl -w 'time: %{time_total}s\n' /books/3
+StructuredTaskScope$FailedException: ...
+time: 1.18s
+						</code></pre>
+					</figure>
+
+					<p class="caption">Fork fails &rarr; siblings cancelled &rarr; scope throws. ~1s on failure.</p>
+				</section>
+
+				<!-- 15. But taskScope isn't real -->
+				<section class="slide" data-eyebrow="The catch">
+					<h2>But <code>taskScope</code> isn't real</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+fun fetchBook(@PathVariable id: Long): Book =
+    StructuredTaskScope.open&lt;Any&gt;().use {
+        val book    = it.fork(Callable { findBook(id) })
+        val reviews = it.fork(Callable { fetchReviewsFor(id) })
+
+        it.join()
+
+        book.get().copy(reviews = reviews.get())
+    }
+						</code></pre>
+					</figure>
+
+					<p class="caption">
+						Verbose. Type parameter <code>&lt;Any&gt;</code>. Explicit <code>Callable</code>.
+						No lambda shorthand.
+					</p>
+				</section>
+
+				<!-- 16. TaskScope wrapper -->
+				<section class="slide" data-eyebrow="Smoothing it out">
+					<h2>Kotlin to the rescue</h2>
+
+					<figure class="snippet" data-featured>
+						<pre><code data-trim class="language-kotlin">
+class TaskScope&lt;T, R&gt;(private val scope: StructuredTaskScope&lt;T, R&gt;)
+    : AutoCloseable by scope {
+
+    fun &lt;A : T&gt; fork(fn: () -&gt; A) = scope.fork(Callable { fn() })
+    fun join(): R = scope.join()
+}
+
+inline fun &lt;T, R&gt; taskScope(block: TaskScope&lt;T, Void&gt;.() -&gt; R): R =
+    TaskScope(StructuredTaskScope.open&lt;T&gt;()).use { it.block() }
+						</code></pre>
+					</figure>
+
+					<p class="caption">A thin wrapper turns the verbose API into the clean one.</p>
+				</section>
+
+				<!-- 17. Side-by-side: the bookstore in both worlds -->
+				<section class="slide" data-eyebrow="Comparing" data-emphasis="code">
+					<h2>The same bookstore</h2>
+
+					<div class="layout-split" data-balance="equal">
+						<div>
+							<p class="col-title" data-lang="kotlin">CoroutineScope</p>
+							<figure class="snippet" data-featured>
+								<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book =
+    runBlocking(Dispatchers.IO) {
+        val book    = async { findBook(id) }
+        val reviews = async { fetchReviewsFor(id) }
+
+        book.await().copy(reviews = reviews.await())
+    }
+
+private suspend fun findBook(id: Long) =
+    runInterruptible {
+        booksRepository.findById(id)
+            ?: throw BookNotFoundException(id)
+    }
+
+private suspend fun fetchReviewsFor(id: Long) =
+    runInterruptible {
+        reviewsService.fetchReviewsFor(id)
+    }
+								</code></pre>
+							</figure>
+						</div>
+						<div>
+							<p class="col-title" data-lang="java">StructuredTaskScope</p>
+							<figure class="snippet" data-featured>
+								<pre><code data-trim class="language-kotlin">
+@GetMapping("/{id}")
+fun fetchBook(@PathVariable id: Long): Book = taskScope {
+    val book    = fork { findBook(id) }
+    val reviews = fork { fetchReviewsFor(id) }
+
+    join()
+
+    book.get().copy(reviews = reviews.get())
+}
+
+private fun findBook(id: Long) =
+    booksRepository.findById(id)
+        ?: throw BookNotFoundException(id)
+
+private fun fetchReviewsFor(id: Long) =
+    reviewsService.fetchReviewsFor(id)
+								</code></pre>
+							</figure>
+						</div>
+					</div>
+				</section>
+
+				<!-- 18. Side-by-side requirements -->
+				<section class="slide" data-eyebrow="Comparing">
+					<h2>The price each pays</h2>
+
+					<div class="layout-split" data-balance="equal">
+						<div>
+							<p class="col-title" data-lang="kotlin">CoroutineScope</p>
+							<ul class="bullets">
+								<li class="bullet" data-variant="errors"><span>Extra library (<code>coroutines</code>)</span></li>
+								<li class="bullet" data-variant="errors"><span><code>runBlocking</code> + <code>Dispatchers.IO</code></span></li>
+								<li class="bullet" data-variant="errors"><span><code>runInterruptible</code> on every blocking call</span></li>
+							</ul>
+						</div>
+						<div>
+							<p class="col-title" data-lang="java">StructuredTaskScope</p>
+							<ul class="bullets">
+								<li class="bullet" data-variant="cancellation"><span>JDK 25 preview, no extra libraries</span></li>
+								<li class="bullet" data-variant="cancellation"><span>Explicit <code>join()</code></span></li>
+								<li class="bullet" data-variant="cancellation"><span>Helper wrapper for ergonomics</span></li>
+							</ul>
+						</div>
+					</div>
+				</section>
+
+				<!-- 19. When to pick which -->
+				<section class="slide" data-eyebrow="Comparing">
+					<h2>Which to pick?</h2>
+
+					<div class="pick-grid">
+						<div></div>
+						<p class="col-title" data-lang="kotlin">CoroutineScope</p>
+						<p class="col-title" data-lang="java">StructuredTaskScope</p>
+
+						<p class="pick-label" data-pick="fit">Pick if</p>
+						<ul class="bullets">
+							<li class="bullet" data-variant="fit"><span>Already non-blocking / reactive</span></li>
+							<li class="bullet" data-variant="fit"><span>Need flexible cancellation patterns</span></li>
+						</ul>
+						<ul class="bullets">
+							<li class="bullet" data-variant="fit"><span>Blocking JDBC / synchronous I/O everywhere</span></li>
+							<li class="bullet" data-variant="fit"><span>Virtual threads on the table</span></li>
+							<li class="bullet" data-variant="fit"><span>Readable stack traces matter</span></li>
+						</ul>
+
+						<p class="pick-label" data-pick="avoid">Avoid if</p>
+						<ul class="bullets">
+							<li class="bullet" data-variant="lifetime"><span>Mostly blocking codebase</span></li>
+							<li class="bullet" data-variant="lifetime"><span>Allergic to <code>suspend</code></span></li>
+						</ul>
+						<ul class="bullets">
+							<li class="bullet" data-variant="lifetime"><span>Preview APIs are a no-go</span></li>
+						</ul>
+					</div>
+				</section>
+
+				<!-- 20. Both are great -->
+				<section class="slide" data-eyebrow="Conclusion">
+					<h2 data-display>Both are great</h2>
+					<p class="tagline">
+						One is old, the other is new &mdash; and just like Kotlin and Java,
+						they'll keep learning from each other.
+					</p>
+				</section>
+
+				<!-- 21. Thank you -->
+				<section class="slide">
+					<h2 data-display>Thank you</h2>
+				</section>
+			</div>
+		</div>
+
+		<script src="dist/reveal.js"></script>
+		<script src="dist/plugin/highlight.js"></script>
+		<script>
+			Reveal.initialize({ hash: true, plugins: [RevealHighlight] }).then(() => {
+				const themes = ['night', 'white'];
+				let i = 0;
+				Reveal.addKeyBinding(
+					{ keyCode: 84, key: 'T', description: 'Cycle theme' },
+					() => {
+						i = (i + 1) % themes.length;
+						document.getElementById('theme-link').href = `dist/theme/${themes[i]}.css`;
+						console.log(`theme: ${themes[i]}`);
+					}
+				);
+			});
+		</script>
+	</body>
+</html>

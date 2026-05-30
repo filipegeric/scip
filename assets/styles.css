@@ -1,0 +1,422 @@
+/* ============================================================================
+   Design tokens
+   ============================================================================ */
+:root {
+	/* Brand colours */
+	--color-kotlin: #7f52ff;
+	--color-java:   #ed8b00;
+	--color-clue:   #e13336;
+	--color-good:   #22c55e;
+
+	/* Translucent variants for borders / underlines */
+	--accent-kotlin: rgba(127, 82, 255, 0.7);
+	--accent-java:   rgba(237, 139, 0, 0.7);
+	--accent-clue:   rgba(225, 51, 54, 0.7);
+	--accent-good:   rgba(34, 197, 94, 0.7);
+
+	/* Pillar tokens (Lifetime / Errors / Cancellation) — aliased so callers
+	   don't hardcode brand colours. `fit` is the "good fit" variant used by
+	   Pick-if bullets on the comparison slide. */
+	--pillar-lifetime:           var(--color-clue);
+	--pillar-errors:             var(--color-kotlin);
+	--pillar-cancellation:       var(--color-java);
+	--pillar-fit:                var(--color-good);
+	--pillar-lifetime-soft:      var(--accent-clue);
+	--pillar-errors-soft:        var(--accent-kotlin);
+	--pillar-cancellation-soft: var(--accent-java);
+	--pillar-fit-soft:           var(--accent-good);
+
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ----------------------------------------------------------------------------
+   All consumer rules below are scoped under `.reveal` so they outrank
+   reveal.js's own `.reveal h2`, `.reveal pre`, `.reveal em`, etc., without
+   needing !important.
+
+   Variant pattern: every component is a single class. Variants live on
+   `data-*` attributes and are matched with attribute selectors.
+   ---------------------------------------------------------------------------- */
+
+/* ============================================================================
+   Eyebrow — `data-eyebrow="..."` on any slide-level container
+   ============================================================================ */
+.reveal [data-eyebrow]::before {
+	content: attr(data-eyebrow);
+	display: block;
+	margin: 0 0 0.3em;
+	font-size: 0.4em;
+	letter-spacing: 0.25em;
+	opacity: 0.5;
+	text-transform: uppercase;
+}
+
+/* ============================================================================
+   Slide-level headings
+   ============================================================================ */
+/* Compact is the default for in-deck headings. */
+.reveal .slide h2 {
+	margin: 0 0 0.8em;
+	font-size: 1.5em;
+}
+/* `data-display` opts into a hero-sized heading (the "Structured
+   Concurrency" idea slide; the "Thank you" closing slide).
+   `max-width` forces multi-word headings to wrap onto two lines without
+   needing an absurdly large font-size. */
+.reveal .slide h2[data-display] {
+	margin: 0 auto;
+	font-size: 2em;
+	max-width: 8em;
+}
+
+/* `data-emphasis="code"` on a slide signals that the code block is the main
+   focus — heading shrinks and the snippet font grows so the code dominates. */
+.reveal .slide[data-emphasis="code"] h2 {
+	font-size: 1.1em;
+	margin-bottom: 0.6em;
+}
+.reveal .slide[data-emphasis="code"] .snippet pre > code {
+	font-size: 0.8em;
+}
+
+/* ============================================================================
+   Inline language colour (used in the title slide subtitle)
+   ============================================================================ */
+.reveal span[data-lang="kotlin"] { color: var(--color-kotlin); }
+.reveal span[data-lang="java"]   { color: var(--color-java); }
+
+/* ============================================================================
+   Code blocks
+   ============================================================================ */
+.reveal pre {
+	margin: 0;
+	box-shadow: none;
+	border-radius: 6px;
+}
+.reveal pre > code {
+	font-size: 0.7em;
+	line-height: 1.5;
+	border-radius: 6px;
+	padding: 0.7em 0.9em;
+	max-height: none;
+}
+
+/* `<figure class="snippet" data-lang="kotlin">` wraps a code block and
+   provides a colour-coded language label via `::before`. */
+.reveal .snippet {
+	margin: 0;
+	text-align: left;
+}
+.reveal .snippet[data-lang]::before {
+	content: attr(data-lang);
+	display: block;
+	margin: 0 0 0.3em;
+	font-size: 0.35em;
+	letter-spacing: 0.2em;
+	opacity: 0.55;
+	text-transform: uppercase;
+	color: var(--snippet-color);
+}
+.reveal .snippet[data-lang="kotlin"] { --snippet-color: var(--color-kotlin); }
+.reveal .snippet[data-lang="java"]   { --snippet-color: var(--color-java); }
+
+/* Featured (single, centred) snippet — used on "Fetching a book".
+   `max-content` propagates down so the box hugs the longest line, instead
+   of stretching to the slide width *or* clipping the longest line. */
+.reveal .snippet[data-featured] {
+	width: max-content;
+	max-width: 100%;
+	margin: 0 auto;
+}
+.reveal .snippet[data-featured] > pre {
+	width: max-content;
+	max-width: 100%;
+}
+.reveal .snippet[data-featured] > pre > code {
+	padding: 0.9em 1.1em;
+}
+
+/* ============================================================================
+   About-me slide — <article class="profile">
+   ============================================================================ */
+.reveal .profile {
+	display: flex;
+	align-items: center;
+	gap: 2em;
+}
+.reveal .profile .avatar {
+	width: 280px;
+	height: 280px;
+	border-radius: 50%;
+	margin: 0;
+	flex-shrink: 0;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.reveal .profile .bio {
+	text-align: left;
+}
+/* Tighter eyebrow inside the profile — `.name` already brings top margin. */
+.reveal .profile .bio[data-eyebrow]::before {
+	margin: 0;
+}
+.reveal .profile .name {
+	margin: 0.1em 0 0.25em;
+	font-size: 1.5em;
+}
+.reveal .profile .role {
+	margin: 0;
+	font-size: 0.65em;
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+}
+.reveal .profile .role .logo {
+	height: 1em;
+	margin: 0;
+	vertical-align: middle;
+}
+.reveal .profile .meta {
+	margin: 0.45em 0 0;
+	font-size: 0.4em;
+	opacity: 0.65;
+	line-height: 1.55;
+}
+.reveal .profile .stack {
+	margin: 0.7em 0 0;
+	font-size: 0.45em;
+	opacity: 0.55;
+}
+.reveal .profile .contacts {
+	margin: 0.55em 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: 0.35em;
+	opacity: 0.5;
+	line-height: 1.7;
+	font-family: var(--font-mono);
+}
+.reveal .profile .contacts a {
+	color: inherit;
+	text-decoration: none;
+}
+
+/* ============================================================================
+   Concept slide — `.tagline`, `<em class="emphasis">`, `.pillars`, `.pillar`
+   ============================================================================ */
+.reveal .tagline {
+	margin: 0.8em auto 1.4em;
+	max-width: 18em;
+	font-size: 0.6em;
+	opacity: 0.85;
+	line-height: 1.5;
+}
+
+/* `em.emphasis` outranks `.reveal em`'s default italic. */
+.reveal em.emphasis {
+	font-style: normal;
+	border-bottom: 2px solid var(--accent-kotlin);
+	padding-bottom: 1px;
+}
+
+.reveal .pillars {
+	display: flex;
+	gap: 1.2em;
+	justify-content: center;
+	max-width: 26em;
+	margin: 0 auto;
+}
+.reveal .pillar {
+	flex: 1;
+	text-align: left;
+	padding-left: 0.8em;
+	border-left: 2px solid var(--pillar-accent, currentColor);
+}
+.reveal .pillar[data-accent="lifetime"]     { --pillar-accent: var(--pillar-lifetime-soft); }
+.reveal .pillar[data-accent="errors"]       { --pillar-accent: var(--pillar-errors-soft); }
+.reveal .pillar[data-accent="cancellation"] { --pillar-accent: var(--pillar-cancellation-soft); }
+.reveal .pillar h3 {
+	margin: 0;
+	font-size: 0.4em;
+	font-weight: normal;
+	letter-spacing: 0.18em;
+	opacity: 0.55;
+	text-transform: uppercase;
+}
+.reveal .pillar p {
+	margin: 0.35em 0 0;
+	font-size: 0.5em;
+	line-height: 1.4;
+}
+
+/* ============================================================================
+   Endpoint slide caption
+   ============================================================================ */
+.reveal .caption {
+	margin: 1.1em auto 0;
+	font-size: 0.45em;
+	opacity: 0.7;
+	max-width: 22em;
+}
+
+/* ============================================================================
+   Two-column layout — used by the "problem" slide
+   ============================================================================ */
+.reveal .layout-split {
+	display: flex;
+	gap: 1.5em;
+	align-items: center;
+	text-align: left;
+}
+.reveal .layout-split .codes {
+	flex: 1.7;
+	min-width: 0;
+}
+.reveal .layout-split .codes .snippet + .snippet {
+	margin-top: 0.7em;
+}
+.reveal .layout-split .bullets {
+	flex: 1;
+}
+/* `data-balance="equal"` is for side-by-side comparison slides. Each column
+   shrinks to its own content (no `flex: 1` stretching) and the whole row
+   is centred on the slide via `justify-content: center`. Columns also
+   centre their inner content vertically so col-titles sit above their
+   bullet lists, both hugging the column's centreline. */
+.reveal .layout-split[data-balance="equal"] {
+	justify-content: center;
+	align-items: flex-start;
+	gap: 3em;
+}
+.reveal .layout-split[data-balance="equal"] > * {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+/* Code snippets used inside an equal-balance comparison need a smaller
+   font so two snippets can sit side-by-side without overflowing the slide. */
+.reveal .layout-split[data-balance="equal"] .snippet pre > code {
+	font-size: 0.45em;
+}
+
+/* Column title — heading for one side of a side-by-side comparison.
+   Uses `data-lang` for brand-coloured headers, same convention as the
+   snippet labels and inline subtitle spans. */
+.reveal .col-title {
+	margin: 0 0 0.5em;
+	font-size: 0.55em;
+	letter-spacing: 0.1em;
+	font-weight: bold;
+	text-transform: uppercase;
+	color: var(--col-title-color, currentColor);
+}
+.reveal .col-title[data-lang="kotlin"] { --col-title-color: var(--color-kotlin); }
+.reveal .col-title[data-lang="java"]   { --col-title-color: var(--color-java); }
+
+/* Qualifier below a col-title (e.g. "(via Kotlin wrapper)"). Sits on its own
+   line so it doesn't widen the title row and unbalance side-by-side columns. */
+.reveal .col-title .col-title-aside {
+	display: block;
+	margin-top: 0.2em;
+	font-size: 0.65em;
+	font-weight: normal;
+	letter-spacing: 0.04em;
+	text-transform: none;
+	opacity: 0.5;
+	color: currentColor;
+}
+
+/* "Pick which?" slide — 3-col grid of [Pick/Avoid label] × [Kotlin] × [Java].
+   Row 1 holds the column titles; rows 2 and 3 hold the Pick-if and Avoid-if
+   bullet pairs. Cells share `gap: 0` and use padding + thin internal borders
+   so the slide reads as a clean comparison table; the row label and both
+   columns' bullet groups share a baseline so the eye can compare scope vs
+   scope at the same vertical position. */
+.reveal .pick-grid {
+	display: grid;
+	grid-template-columns: auto 1fr 1fr;
+	gap: 0;
+	/* Force every cell to fill the full row height. Without explicit
+	   `align-items: stretch` + `align-self: stretch` on the items, the
+	   shorter cell (e.g. 2-bullet "Pick if" in the left column) was
+	   shrinking to its own content while the taller (3-bullet) right
+	   cell defined the row — leaving the bottom border on the short cell
+	   drawn at its content edge instead of the row's edge. */
+	align-items: stretch;
+	text-align: left;
+	max-width: 30em;
+	margin: 0 auto;
+}
+.reveal .pick-grid > * {
+	padding: 1.4em 1.6em;
+	align-self: stretch;
+}
+/* Override .bullets {padding:0} — needs higher specificity than the base rule. */
+.reveal .pick-grid > .bullets {
+	padding: 1.4em 1.6em;
+}
+/* Row dividers — drawn as border-top on rows 2 & 3 (children 4-9) so they sit
+   on the grid row lines themselves, not on cell bottoms. Cell stretch was
+   unreliable across columns, but grid row lines are always uniform. */
+.reveal .pick-grid > *:nth-child(n+4) {
+	border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+/* Cols 1 and 2 get a right rule; col 3 stays bare. */
+.reveal .pick-grid > *:nth-child(3n+1),
+.reveal .pick-grid > *:nth-child(3n+2) {
+	border-right: 1px solid rgba(255, 255, 255, 0.18);
+}
+.reveal .pick-grid .col-title  { margin: 0; }
+.reveal .pick-grid .bullets    { margin: 0; }
+/* More breathing room between bullets inside the comparison table — the
+   default 0.9em is too tight here, where each cell is its own visual unit. */
+.reveal .pick-grid .bullet     { margin-bottom: 1.2em; }
+.reveal .pick-grid .bullet:last-child { margin-bottom: 0; }
+
+/* Row label sits in column 1, aligned to the top of its bullet row. */
+.reveal .pick-label {
+	margin: 0;
+	font-size: 0.4em;
+	letter-spacing: 0.18em;
+	font-weight: bold;
+	text-transform: uppercase;
+	opacity: 0.7;
+	white-space: nowrap;
+}
+.reveal .pick-label[data-pick="fit"]::before   { content: "✓ "; color: var(--color-good); opacity: 1; }
+.reveal .pick-label[data-pick="avoid"]::before { content: "✗ "; color: var(--color-clue); opacity: 1; }
+
+/* ============================================================================
+   Bullet list — `.bullets` + `.bullet[data-variant="..."]`
+   ============================================================================ */
+.reveal .bullets {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	font-size: 0.4em;
+	opacity: 0.9;
+	line-height: 1.5;
+}
+.reveal .bullet {
+	display: flex;
+	gap: 0.6em;
+	margin-bottom: 0.9em;
+}
+.reveal .bullet:last-child {
+	margin-bottom: 0;
+}
+.reveal .bullet::before {
+	content: "●";
+	color: var(--bullet-color, currentColor);
+	flex-shrink: 0;
+}
+.reveal .bullet[data-variant="lifetime"]     { --bullet-color: var(--pillar-lifetime); }
+.reveal .bullet[data-variant="errors"]       { --bullet-color: var(--pillar-errors); }
+.reveal .bullet[data-variant="cancellation"] { --bullet-color: var(--pillar-cancellation); }
+.reveal .bullet[data-variant="fit"]          { --bullet-color: var(--pillar-fit); }
+
+/* Inline `<code>` inside a bullet — slightly muted. */
+.reveal .bullet code {
+	font-size: 0.95em;
+	opacity: 0.85;
+}
