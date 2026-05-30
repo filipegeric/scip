@@ -32,10 +32,15 @@ Both of these calls take about one second to complete, because we simulate a del
 the entire endpoint takes two seconds to return. And we can see this if we try to call the endpoint.
 Here I have the service running and if I call the endpoint here, I get the response after about two seconds, and in the logs we can see how it was executed.
 We see START log from the controller, then we see START from the repository and after about a second we see DONE from the repository. After that we 
-start fetching the reviews, which also takes a second, and then finally we see DONE from the controller.
+start fetching the reviews, which also takes a second, and then finally we see SUCCESS from the controller.
 
 Now if we take a closer look in the controller, we can see that these two calls are completely independent and we don't really need to run them sequentially.
 We could run them concurrently and that way hopefully make the entire endpoint faster.
+
+One thing to keep in mind for the rest of the talk: both of these are blocking calls, a JDBC query and a blocking HTTP call, running on a blocking webmvc server.
+That's the common real-world setup, and it's exactly the case this comparison is about. I'm pointing this out up front because it shapes everything that follows:
+in fully non-blocking code, coroutines have much less friction than what we're about to see. So this isn't "coroutines are bad", it's "here's what happens when you
+mix coroutines with blocking code", which is where a lot of us actually live.
 
 If I were to google: "two calls in parallel in kotlin", I would most likely get a result for coroutines. Coroutines are a default when it comes to concurrency 
 in Kotlin. So let's see how we can use them in our example here.
@@ -44,7 +49,7 @@ Coroutines have two main components, one of them is part of the language and the
 is the `suspend` keyword. `suspend` is a function modifier, and it basically tells the compiler that this function can "pause" its execution and then continue it
 at some later point. Under the hood, the compiler converts that to a callback somehow, and we don't need the details today. The other part comes from the library, and that's the coroutines builders.
 
-One of the most used ones is `coroutineScope` and we'll try to use it here. Since we have a lamda here now, we have to make this an implicit return. 
+One of the most used ones is `coroutineScope` and we'll try to use it here. Since we have a lambda here now, we have to make this an implicit return. 
 So the idea is that we can run these two calls asynchronously and that way 
 make the entire endpoint faster and the way to do that is with `async` coroutine builder.
 
@@ -52,16 +57,16 @@ make the entire endpoint faster and the way to do that is with `async` coroutine
 
 How does this work exactly? In the lambda here from `coroutineScope`, we have an implicit receiver `this` which is of type `CoroutineScope` and the `async` 
 function is actually an extension function on `CoroutineScope`. This is a very clever design, and it's actually what enforces structured concurrency.
-We can create and start new coroutines onlt from a scope and the lifetime of those coroutines is bound to the scope.
+We can create and start new coroutines only from a scope and the lifetime of those coroutines is bound to the scope.
 
 So let's try to call the endpoint. Oops, it doesn't work. We get a `ClassNotFoundException`. Apparently we are missing `Publisher`.
-Why would we need that? Because `coroutineScope` is a suspend function, our controller method had to become `suspend` too, and Spring MVC adapts suspend handlers
+Quick heads-up before we dig in: this next bit is a Spring quirk, not a structured concurrency concept, so there's nothing to memorize here.
+Why would we need a `Publisher` at all? Because `coroutineScope` is a suspend function, our controller method had to become `suspend` too, and Spring MVC adapts suspend handlers
 through a reactive `Publisher` under the hood, which the webmvc starter doesn't ship.
-If we take a look in `build.gradle.kts`, we can see that we are using `webmvc`, which is the blocking variant of Spring.
 If we were using `webflux`, `Publisher` would be included by default and this would work fine. So what are our options here:
 We don't want to migrate to `webflux` because of just one endpoint, so instead we can use `runBlocking` and in that case we no longer need `suspend` here.
 `runBlocking` is a regular, non-suspend function that blocks the calling thread and bridges into the coroutine world, so our controller method goes back to being
-an ordinary blocking function, and Spring MVC is happy again.
+an ordinary blocking function, and Spring MVC is happy again. Inside the lambda, everything works exactly the same as in `coroutineScope`.
 
 If we now try to run this, it works, but it still takes 2 seconds. Let's try to understand why that happens by reading the documentation for `runBlocking`.
 
@@ -88,12 +93,16 @@ and we'll get an error on the client. So let's try it out...
 Not quite what we wanted. We get an error, but only after three seconds, and the only thing worse than an error is a slow error.
 So why does this happen and how to fix it?
 
-It happens because we're mixing blocking and non-blocking code. When the reviews service fails after one second, the error is propagated to the parent scope, 
-and it then tries to cancel all the children, but since this `findBook` is blocking, it cannot be canceled, it can only be interrupted, and that's why we 
-wait for two more seconds before we see an error. If we check the logs, we can see `DONE` from the repository, which means it was never canceled.
+It happens because coroutine cancellation is *cooperative*. When the reviews service fails after one second, the error propagates to the parent scope, 
+and the scope tries to cancel the other child — the `findBook` call. But "cancel" here doesn't forcibly stop anything: a coroutine only notices it's been 
+cancelled at a suspension point. Our `findBook` is a blocking `Thread.sleep` with no suspension point inside it, so it never checks, never notices the 
+cancellation, and just runs to completion. That's why we wait the full three seconds instead of bailing out at one. And if we check the logs, we still see 
+`DONE` from the repository — proof it ran to the end and was never actually cancelled.
 
 How do we fix this?
-We need to wrap these blocking calls in `runInterruptible` and then the compiler also makes us add the `suspend` keyword.
+The fix is to give cancellation a way to reach blocking code. We wrap these calls in `runInterruptible`, which connects coroutine cancellation to a real 
+`Thread.interrupt()` — and `Thread.sleep` *does* respond to interruption by throwing. So now when the scope cancels, the thread is interrupted, the sleep 
+throws, and `findBook` actually stops. (Wrapping in `runInterruptible` is a suspend call, so the compiler makes us mark the helper as `suspend`.)
 If we check the documentation, it says: 
 
 `Calls the specified block with a given coroutine context in an interruptible manner. 
@@ -125,7 +134,8 @@ So let's see how we can use this from Kotlin.
 
 In Kotlin, we have this `taskScope` builder function, which is a small Kotlin helper I wrapped around the raw Java API, and I'll show what's inside in a moment.
 Instead of `async` we use `fork`, and instead of `await` we use `get`.
-Each `fork` runs on its own virtual thread, so blocking is cheap, and cancellation works through real thread interruption natively, exactly the machinery
+Each `fork` runs on its own virtual thread. Virtual threads are lightweight threads managed by the JVM: you can have millions of them, and when one makes a blocking
+call it just parks instead of pinning an OS thread. So blocking is cheap, and cancellation works through real thread interruption natively, exactly the machinery
 `runInterruptible` had to bolt onto coroutines. That's why everything here can just be blocking, and we no longer need `suspend` and `runInterruptible`.
 
 And one final thing that we mustn't forget is to call the `join` method.
@@ -145,6 +155,10 @@ Let's see both examples side by side now...
 It looks similar and there are pros and cons of both approaches.
 With coroutines we have to remember to use the right dispatcher and to wrap all blocking calls in `runInterruptible`.
 With `StructuredTaskScope` we have to remeber to call the `join` method.
+
+And remember the frame from the start: most of the coroutines friction here comes from running blocking code on a blocking server. If our calls were genuinely
+non-blocking suspend functions, coroutines would be a great fit and most of this would melt away. But for the blocking world many of us work in,
+`StructuredTaskScope` plus virtual threads handles it natively, with less to remember.
 
 Now a small disclaimer about the example on the right here: The `taskScope` builder doesn't really exist. At least not yet, 
 hopefully the Kotlin team will add it at some point.
