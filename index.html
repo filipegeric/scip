@@ -79,9 +79,76 @@
 						<h2 data-display>Demo</h2>
 					</section>
 
-					<!-- 3b. Thank you (vertical) -->
+					<!-- 3b. Side-by-side requirements (vertical) -->
+					<section class="slide" data-eyebrow="Comparing">
+						<h2>The price each pays</h2>
+
+						<div class="layout-split" data-balance="equal">
+							<div>
+								<p class="col-title" data-lang="kotlin">CoroutineScope</p>
+								<ul class="bullets">
+									<li class="bullet" data-variant="errors"><span>Extra library (<code>coroutines</code>)</span></li>
+									<li class="bullet" data-variant="errors"><span><code>runBlocking</code> + <code>Dispatchers.IO</code></span></li>
+									<li class="bullet" data-variant="errors"><span><code>runInterruptible</code> on every blocking call</span></li>
+								</ul>
+							</div>
+							<div>
+								<p class="col-title" data-lang="java">StructuredTaskScope</p>
+								<ul class="bullets">
+									<li class="bullet" data-variant="cancellation"><span>JDK 25 preview, no extra libraries</span></li>
+									<li class="bullet" data-variant="cancellation"><span>Explicit <code>join()</code></span></li>
+									<li class="bullet" data-variant="cancellation"><span>Helper wrapper for ergonomics</span></li>
+								</ul>
+							</div>
+						</div>
+					</section>
+
+					<!-- 3c. When to pick which (vertical) -->
+					<section class="slide" data-eyebrow="Comparing">
+						<h2>Which to pick?</h2>
+
+						<div class="pick-grid">
+							<div></div>
+							<p class="col-title" data-lang="kotlin">CoroutineScope</p>
+							<p class="col-title" data-lang="java">StructuredTaskScope</p>
+
+							<p class="pick-label" data-pick="fit">Pick if</p>
+							<ul class="bullets">
+								<li class="bullet" data-variant="fit"><span>Already non-blocking / reactive</span></li>
+								<li class="bullet" data-variant="fit"><span>Need flexible cancellation patterns</span></li>
+							</ul>
+							<ul class="bullets">
+								<li class="bullet" data-variant="fit"><span>Blocking JDBC / synchronous I/O everywhere</span></li>
+								<li class="bullet" data-variant="fit"><span>Virtual threads on the table</span></li>
+								<li class="bullet" data-variant="fit"><span>Readable stack traces matter</span></li>
+							</ul>
+
+							<p class="pick-label" data-pick="avoid">Avoid if</p>
+							<ul class="bullets">
+								<li class="bullet" data-variant="lifetime"><span>Mostly blocking codebase</span></li>
+								<li class="bullet" data-variant="lifetime"><span>Allergic to <code>suspend</code></span></li>
+							</ul>
+							<ul class="bullets">
+								<li class="bullet" data-variant="lifetime"><span>Preview APIs are a no-go</span></li>
+							</ul>
+						</div>
+					</section>
+
+					<!-- 3d. Thank you (vertical) -->
 					<section class="slide">
 						<h2 data-display>Thank you</h2>
+						<div class="takeaways">
+							<a class="takeaway" href="https://github.com/filipegeric/bookstore" target="_blank" rel="noopener">
+								<img class="qr" src="assets/qr-bookstore.svg" alt="QR code for the demo repo" />
+								<span class="label">Demo code</span>
+								<span class="url">github.com/filipegeric/bookstore</span>
+							</a>
+							<a class="takeaway" href="https://github.com/filipegeric/scip" target="_blank" rel="noopener">
+								<img class="qr" src="assets/qr-slides.svg" alt="QR code for the slides" />
+								<span class="label">Slides</span>
+								<span class="url">github.com/filipegeric/scip</span>
+							</a>
+						</div>
 					</section>
 				</section>
 
@@ -462,8 +529,24 @@ private fun fetchReviewsFor(id: Long) =
 				<!-- 21. Thank you -->
 				<section class="slide">
 					<h2 data-display>Thank you</h2>
+					<div class="takeaways">
+						<a class="takeaway" href="https://github.com/filipegeric/bookstore" target="_blank" rel="noopener">
+							<img class="qr" src="assets/qr-bookstore.svg" alt="QR code for the demo repo" />
+							<span class="label">Demo code</span>
+							<span class="url">github.com/filipegeric/bookstore</span>
+						</a>
+						<a class="takeaway" href="https://github.com/filipegeric/scip" target="_blank" rel="noopener">
+							<img class="qr" src="assets/qr-slides.svg" alt="QR code for the slides" />
+							<span class="label">Slides</span>
+							<span class="url">github.com/filipegeric/scip</span>
+						</a>
+					</div>
 				</section>
 			</div>
+
+			<footer class="handles">
+				<a href="https://linkedin.com/in/filipegeric" target="_blank" rel="noopener">@filipegeric</a>
+			</footer>
 		</div>
 
 		<script src="dist/reveal.js"></script>
