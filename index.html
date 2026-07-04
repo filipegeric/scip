@@ -50,7 +50,56 @@
 					</article>
 				</section>
 
-				<!-- 3. Structured Concurrency — the idea -->
+				<!-- 3. Pit stop photo -->
+				<section class="slide" data-eyebrow="An analogy">
+					<h2>The pit stop</h2>
+					<img class="photo" src="assets/bob-kozel-UDFMMf-iTdA-unsplash.webp" alt="An IndyCar pit crew changing all four tyres at once" />
+				</section>
+
+				<!-- 4. What is concurrency? -->
+				<section class="slide" data-eyebrow="First, the basics">
+					<h2>What is concurrency?</h2>
+
+					<p class="tagline">
+						Tasks whose lifetimes <em class="emphasis">overlap</em>
+						&mdash; not run one after another.
+					</p>
+
+					<div class="scenarios">
+						<div class="scenario">
+							<div class="scenario-head">
+								<span class="scenario-title">One tyre at a time</span>
+								<span class="scenario-time">~8s</span>
+							</div>
+							<div class="timeline">
+								<div class="task" data-task="fl" style="--col: 1; --span: 2;">Front-left</div>
+								<div class="task" data-task="fr" style="--col: 3; --span: 2;">Front-right</div>
+								<div class="task" data-task="rl" style="--col: 5; --span: 2;">Rear-left</div>
+								<div class="task" data-task="rr" style="--col: 7; --span: 2;">Rear-right</div>
+							</div>
+						</div>
+
+						<div class="scenario" data-outcome="win">
+							<div class="scenario-head">
+								<span class="scenario-title">All four at once</span>
+								<span class="scenario-time">~2s</span>
+							</div>
+							<div class="timeline">
+								<div class="task" data-task="fl" style="--col: 1; --span: 2;">Front-left</div>
+								<div class="task" data-task="fr" style="--col: 1; --span: 2;">Front-right</div>
+								<div class="task" data-task="rl" style="--col: 1; --span: 2;">Rear-left</div>
+								<div class="task" data-task="rr" style="--col: 1; --span: 2;">Rear-right</div>
+							</div>
+						</div>
+					</div>
+
+					<p class="caption">
+						The car leaves only once <em class="emphasis">every</em> wheel is on
+						&mdash; like firing off several I/O calls and waiting for them together.
+					</p>
+				</section>
+
+				<!-- 5. Structured Concurrency — the idea -->
 				<section>
 					<section class="slide" data-eyebrow="The idea">
 						<h2 data-display>Structured Concurrency</h2>
@@ -152,7 +201,7 @@
 					</section>
 				</section>
 
-				<!-- 4. Fetching a book — Part 1 starting code -->
+				<!-- 6. Fetching a book — Part 1 starting code -->
 				<section class="slide" data-eyebrow="The endpoint">
 					<h2>Fetching a book</h2>
 
@@ -171,7 +220,7 @@ fun fetchBook(@PathVariable id: Long): Book {
 					<p class="caption">Two I/O calls, one after the other. Total: ~2s.</p>
 				</section>
 
-				<!-- 5. Wishful thinking -->
+				<!-- 7. Wishful thinking -->
 				<section class="slide" data-eyebrow="Going parallel">
 					<h2>First attempt</h2>
 
@@ -190,7 +239,7 @@ suspend fun fetchBook(@PathVariable id: Long): Book = coroutineScope {
 					<p class="caption">Compiles, misbehaves at runtime &mdash; webmvc + blocking JDBC weren't built for coroutines.</p>
 				</section>
 
-				<!-- 6. runBlocking -->
+				<!-- 8. runBlocking -->
 				<section class="slide" data-eyebrow="Going parallel">
 					<h2>Try <code>runBlocking</code></h2>
 
@@ -209,7 +258,7 @@ fun fetchBook(@PathVariable id: Long): Book = runBlocking {
 					<p class="caption">Works. Still ~2s &mdash; <code>async</code> starts eagerly on <code>runBlocking</code>'s single thread; with no suspension points, the calls run back-to-back.</p>
 				</section>
 
-				<!-- 7. Dispatchers.IO -->
+				<!-- 9. Dispatchers.IO -->
 				<section class="slide" data-eyebrow="Going parallel">
 					<h2><code>Dispatchers.IO</code></h2>
 
@@ -228,7 +277,7 @@ fun fetchBook(@PathVariable id: Long): Book = runBlocking(Dispatchers.IO) {
 					<p class="caption">~1s. Happy path done.</p>
 				</section>
 
-				<!-- 8. The sad path — errors -->
+				<!-- 10. The sad path — errors -->
 				<section class="slide" data-eyebrow="Errors">
 					<h2>What if reviews fails?</h2>
 
@@ -251,7 +300,7 @@ time: 3.18s
 					</p>
 				</section>
 
-				<!-- 9. runInterruptible -->
+				<!-- 11. runInterruptible -->
 				<section class="slide" data-eyebrow="Errors">
 					<h2><code>runInterruptible</code></h2>
 
@@ -273,7 +322,7 @@ private suspend fun fetchReviewsFor(id: Long) = runInterruptible {
 					</p>
 				</section>
 
-				<!-- 10. The price of CoroutineScope (recap) -->
+				<!-- 12. The price of CoroutineScope (recap) -->
 				<section class="slide" data-eyebrow="Wait — what it took">
 					<h2>Just to make 2 calls in parallel</h2>
 
@@ -285,7 +334,7 @@ private suspend fun fetchReviewsFor(id: Long) = runInterruptible {
 					</ul>
 				</section>
 
-				<!-- 11. Coroutines are all-in / there's another way -->
+				<!-- 13. Coroutines are all-in / there's another way -->
 				<section class="slide" data-eyebrow="Another way">
 					<h2>Coroutines are all-in</h2>
 
@@ -295,7 +344,7 @@ private suspend fun fetchReviewsFor(id: Long) = runInterruptible {
 					</p>
 				</section>
 
-				<!-- 12. StructuredTaskScope — canonical example from JEP 505 -->
+				<!-- 14. StructuredTaskScope — canonical example from JEP 505 -->
 				<section class="slide" data-eyebrow="JEP 505">
 					<h2>StructuredTaskScope</h2>
 
@@ -322,7 +371,7 @@ Response handle() throws InterruptedException {
 					<p class="caption">JDK 25 preview &mdash; Java's native structured concurrency.</p>
 				</section>
 
-				<!-- 13. Bookstore with taskScope -->
+				<!-- 15. Bookstore with taskScope -->
 				<section class="slide" data-eyebrow="StructuredTaskScope">
 					<h2>Back to the bookstore</h2>
 
@@ -345,7 +394,7 @@ fun fetchBook(@PathVariable id: Long): Book = taskScope {
 					</p>
 				</section>
 
-				<!-- 14. Sad path: just works -->
+				<!-- 16. Sad path: just works -->
 				<section class="slide" data-eyebrow="StructuredTaskScope">
 					<h2>Sad path: just works</h2>
 
@@ -360,7 +409,7 @@ time: 1.18s
 					<p class="caption">Fork fails &rarr; siblings cancelled &rarr; scope throws. ~1s on failure.</p>
 				</section>
 
-				<!-- 15. But taskScope isn't real -->
+				<!-- 17. But taskScope isn't real -->
 				<section class="slide" data-eyebrow="The catch">
 					<h2>But <code>taskScope</code> isn't real</h2>
 
@@ -384,7 +433,7 @@ fun fetchBook(@PathVariable id: Long): Book =
 					</p>
 				</section>
 
-				<!-- 16. TaskScope wrapper -->
+				<!-- 18. TaskScope wrapper -->
 				<section class="slide" data-eyebrow="Smoothing it out">
 					<h2>Kotlin to the rescue</h2>
 
@@ -405,7 +454,7 @@ inline fun &lt;T, R&gt; taskScope(block: TaskScope&lt;T, Void&gt;.() -&gt; R): R
 					<p class="caption">A thin wrapper turns the verbose API into the clean one.</p>
 				</section>
 
-				<!-- 17. Side-by-side: the bookstore in both worlds -->
+				<!-- 19. Side-by-side: the bookstore in both worlds -->
 				<section class="slide" data-eyebrow="Comparing" data-emphasis="code">
 					<h2>The same bookstore</h2>
 
@@ -462,7 +511,7 @@ private fun fetchReviewsFor(id: Long) =
 					</div>
 				</section>
 
-				<!-- 18. Side-by-side requirements -->
+				<!-- 20. Side-by-side requirements -->
 				<section class="slide" data-eyebrow="Comparing">
 					<h2>The price each pays</h2>
 
@@ -486,7 +535,7 @@ private fun fetchReviewsFor(id: Long) =
 					</div>
 				</section>
 
-				<!-- 19. When to pick which -->
+				<!-- 21. When to pick which -->
 				<section class="slide" data-eyebrow="Comparing">
 					<h2>Which to pick?</h2>
 
@@ -517,7 +566,7 @@ private fun fetchReviewsFor(id: Long) =
 					</div>
 				</section>
 
-				<!-- 20. Both are great -->
+				<!-- 22. Both are great -->
 				<section class="slide" data-eyebrow="Conclusion">
 					<h2 data-display>Both are great</h2>
 					<p class="tagline">
@@ -526,7 +575,7 @@ private fun fetchReviewsFor(id: Long) =
 					</p>
 				</section>
 
-				<!-- 21. Thank you -->
+				<!-- 23. Thank you -->
 				<section class="slide">
 					<h2 data-display>Thank you</h2>
 					<div class="takeaways">
